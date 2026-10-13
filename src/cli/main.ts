@@ -20,7 +20,7 @@ A chat is its id (a phone number or email for 1:1 chats) or its name.
 
 Options
   -n, --limit <n>     how many to show (default 30)
-  -s, --since <when>  "30m", "12h", "3d", "2w", or a date like 2026-10-01
+  -s, --since <when>  "30m", "12h", "3d", "2w", today, yesterday, or a date
   -u, --until <when>  same forms as --since
   -c, --chat <chat>   limit search or watch to one chat
   -f, --file <path>   attach a file to send (repeatable)
@@ -112,7 +112,7 @@ async function run(args: Args, out: (line: string) => void): Promise<void> {
       return;
     }
     default:
-      throw new Error(`unknown command "${args.command}"\n\n${HELP}`);
+      throw new Error(`unknown command "${args.command}", see pigeon --help`);
   }
 }
 

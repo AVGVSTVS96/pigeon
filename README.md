@@ -46,7 +46,8 @@ pigeon chats                 # chats, most recent first
 pigeon chats book            # chats whose name contains "book"
 pigeon read mom              # the last 30 messages with Mom
 pigeon read                  # the last 30 messages anywhere
-pigeon read -s 1d            # everything from the last day
+pigeon read -s 1d            # everything from the last 24 hours
+pigeon read -s yesterday -u today  # all of yesterday
 pigeon search dinner sunday  # messages with every word, newest 30
 pigeon search pie -c mom     # ...in one chat
 pigeon watch                 # new messages, live
@@ -64,7 +65,7 @@ person's phone number or email, written any way you like (`+1 212 555 0101`,
 | Flag | Meaning |
 | ---- | ------- |
 | `-n`, `--limit <n>` | how many to show (default 30) |
-| `-s`, `--since <when>` | `30m`, `12h`, `3d`, `2w`, or a date like `2026-10-01` |
+| `-s`, `--since <when>` | `30m`, `12h`, `3d`, `2w`, `today`, `yesterday`, or a date like `2026-10-01` |
 | `-u`, `--until <when>` | same forms as `--since` |
 | `-c`, `--chat <chat>` | limit `search` or `watch` to one chat |
 | `-f`, `--file <path>` | attach a file to `send` (repeatable) |

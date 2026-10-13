@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "../src/cli/main.ts";
 import { localIso, shortDate } from "../src/cli/format.ts";
+import { parseWhen } from "../src/time.ts";
 import { fakeChatDb, fakeContacts } from "./fixture.ts";
 
 const RILEY = "+12125550100";
@@ -114,6 +115,13 @@ describe("parse", () => {
     const args = parse(["search", "gate", "code", "-n", "5", "-s", "3d", "--json"]);
     expect(args).toMatchObject({ command: "search", args: ["gate", "code"], limit: 5, json: true });
     expect(Date.now() - args.since!.getTime()).toBeCloseTo(3 * 86_400_000, -4);
+  });
+
+  test("reads today and yesterday as local midnights", () => {
+    const now = new Date(2026, 9, 13, 15, 30).getTime();
+    expect(parseWhen("today", now)).toEqual(new Date(2026, 9, 13));
+    expect(parseWhen("Yesterday", now)).toEqual(new Date(2026, 9, 12));
+    expect(parseWhen("90m", now)).toEqual(new Date(2026, 9, 13, 14, 0));
   });
 
   test("rejects a bad limit", () => {

@@ -56,6 +56,12 @@ describe("redact", () => {
     expect(rule(message())).toMatchObject({ text: `the ${REDACTED} 4321` });
   });
 
+  test("leaves a Date passed to it untouched", () => {
+    const on = new Date(2026, 9, 6, 21, 14);
+    redact({ on });
+    expect(on).toEqual(new Date(2026, 9, 6, 21, 14));
+  });
+
   test("since and until bound the rule", () => {
     const rule = redact({ since: "2026-10-06T21:00", until: "2026-10-06T22:00" });
     expect(rule(message())).toMatchObject({ redacted: true });

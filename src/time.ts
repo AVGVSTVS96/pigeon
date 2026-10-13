@@ -16,16 +16,22 @@ export function toDate(input: DateInput): Date {
 
 /** A calendar day in local time, as [start, end). */
 export function dayRange(input: DateInput): [Date, Date] {
-  const start = toDate(input);
+  const start = new Date(toDate(input));
   start.setHours(0, 0, 0, 0);
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
   return [start, end];
 }
 
-/** CLI times: "30m", "12h", "3d", "2w" ago, or any date `toDate` reads. */
+/** CLI times: "30m", "12h", "3d", "2w" ago, "today" or "yesterday" (from midnight), or any date `toDate` reads. */
 export function parseWhen(input: string, now = Date.now()): Date {
-  const ago = AGO.exec(input.trim());
+  const word = input.trim().toLowerCase();
+  if (word === "today" || word === "yesterday") {
+    const [start] = dayRange(now);
+    if (word === "yesterday") start.setDate(start.getDate() - 1);
+    return start;
+  }
+  const ago = AGO.exec(word);
   if (ago) return new Date(now - Number(ago[1]) * UNIT_MS[ago[2] as keyof typeof UNIT_MS]);
   return toDate(input);
 }

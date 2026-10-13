@@ -19,7 +19,7 @@ pigeon send <chat> "text" [-f file]
 ```
 
 - A chat is its id (a phone number or email for 1:1 chats, `chat…` for groups) or its name. If a name matches several chats, pigeon lists them; retry with the id.
-- `-s/--since` and `-u/--until` take `30m`, `12h`, `3d`, `2w` or a date.
+- `-s/--since` and `-u/--until` take `30m`, `12h`, `3d`, `2w`, `today`, `yesterday` or a date.
 - Add `--json` for one object per line: `chat`, `from` (`id` is `"me"` for the user), `text`, `date` (local time), `attachments`, `replyTo`, `redacted`.
 - Default output is a compact transcript; prefer it for reading, `--json` for processing.
 - Sending is visible to other people: only send when the user asked for that message.
