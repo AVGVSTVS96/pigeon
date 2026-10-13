@@ -230,6 +230,17 @@ for await (const m of pigeon.watch()) {
 
 `pigeon({ sources, filters })` builds one without reading a config file.
 
+## For agents
+
+Agents read the same transcripts you do, and `--json` when they need
+structure. [`skills/pigeon/SKILL.md`](skills/pigeon/SKILL.md) teaches Claude
+Code, Codex and other skill-aware agents to use pigeon instead of opening
+`chat.db` themselves:
+
+```bash
+cp -r skills/pigeon ~/.claude/skills/
+```
+
 ## How it reads iMessage
 
 pigeon opens `chat.db` read-only and never writes to it. It reads message
