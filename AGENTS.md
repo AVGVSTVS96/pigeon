@@ -61,9 +61,11 @@ test/                  fixture.ts builds fake chat.db / Contacts databases
 
 ## Invariants
 
-**Filters can't be skipped.** No flag, env var or option bypasses them. Every
-path that hands out messages (`messages`, `watch`, the CLI, the library) goes
-through `screen()` in `pigeon.ts`.
+**Filters can't be skipped.** No flag or option bypasses them. Every path
+that hands out messages (`messages`, `watch`, the CLI, the library) goes
+through `screen()` in `pigeon.ts`. Choosing a different config file
+(`PIGEON_CONFIG`, `XDG_CONFIG_HOME`) is deliberate, not careless, and stays
+allowed: pigeon guards against careless reads, not determined ones.
 
 **Fail closed.** A filter that throws, or returns anything but `true` or a
 message, drops that message. A config that fails to import or has the wrong
