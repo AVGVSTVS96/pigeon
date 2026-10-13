@@ -17,7 +17,8 @@ export function configDir(): string {
   return join(base, "pigeon");
 }
 
-async function findConfig(): Promise<string | undefined> {
+/** The config file pigeon will load, if there is one. */
+export async function findConfig(): Promise<string | undefined> {
   const explicit = process.env.PIGEON_CONFIG?.trim();
   if (explicit) return explicit;
   for (const name of ["config.ts", "config.js"]) {

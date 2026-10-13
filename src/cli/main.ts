@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { parseArgs } from "node:util";
-import { configDir, loadConfig } from "../config.ts";
+import { findConfig, loadConfig } from "../config.ts";
 import { pigeon } from "../pigeon.ts";
 import { parseWhen } from "../time.ts";
 import type { Message } from "../types.ts";
@@ -100,12 +100,13 @@ async function run(args: Args, out: (line: string) => void): Promise<void> {
     case "send": {
       const [chat, ...words] = args.args;
       if (!chat) throw new Error("send needs a chat: pigeon send <chat> <text>");
-      const text = words.length > 0 ? words.join(" ") : process.stdin.isTTY ? "" : (await Bun.stdin.text()).trimEnd();
+      const piped = words.length === 0 && args.files.length === 0 && !process.stdin.isTTY;
+      const text = piped ? (await Bun.stdin.text()).trimEnd() : words.join(" ");
       await p.send(chat, { text, files: args.files });
       return;
     }
     case "config": {
-      out(`config   ${process.env.PIGEON_CONFIG || `${configDir()}/config.ts`}`);
+      out(`config   ${(await findConfig()) ?? "none"}`);
       out(`sources  ${p.sources.map((s) => s.label ?? s.id).join(", ")}`);
       out(`filters  ${config.filters?.length ?? 0}`);
       return;
