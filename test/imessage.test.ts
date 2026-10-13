@@ -21,7 +21,15 @@ fake.message({ chat: rileySms, from: RILEY, text: "sent over sms", service: "SMS
 fake.message({ chat: rileyIm, from: "me", text: "new macOS keeps text here", bodyOnly: true, date: day(3) });
 fake.message({ chat: rileyIm, from: RILEY, text: "Loved “hey”", reactionTo: first.guid, date: day(3, 13) });
 fake.message({ chat: rileyIm, from: RILEY, date: day(3, 14), itemType: 1 });
-fake.message({ chat: group, from: SAM, text: "￼", attachments: [{ name: "IMG_0001.heic", mime: "image/heic" }], date: day(4) });
+const saved = join(fake.dir, "IMG_0002.jpg");
+writeFileSync(saved, "");
+fake.message({
+  chat: group,
+  from: SAM,
+  text: "\uFFFC\uFFFC",
+  attachments: [{ name: "IMG_0001.heic", mime: "image/heic" }, { name: "IMG_0002.jpg", path: saved }],
+  date: day(4),
+});
 fake.message({ chat: group, from: RILEY, text: "nice", replyTo: first.guid, date: day(5) });
 fake.message({ chat: named, from: SAM, text: "chapter 3 tonight", date: day(6) });
 
