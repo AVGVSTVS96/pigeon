@@ -31,6 +31,8 @@ async function stage(file: string): Promise<string> {
 
 export type Recipient = { chat: string } | { handle: string };
 
+const TIMEOUT_MS = 30_000;
+
 export async function send(to: Recipient, { text = "", files = [] }: Outgoing): Promise<void> {
   if (!text && files.length === 0) throw new Error("nothing to send");
   const staged = await Promise.all(files.map(stage));
@@ -39,8 +41,14 @@ export async function send(to: Recipient, { text = "", files = [] }: Outgoing): 
     stdin: new Blob([SCRIPT]),
     stdout: "ignore",
     stderr: "pipe",
+    timeout: TIMEOUT_MS,
   });
-  if ((await proc.exited) !== 0) {
-    throw new Error(`Messages couldn't send: ${(await new Response(proc.stderr).text()).trim()}`);
+  const code = await proc.exited;
+  if (proc.signalCode) {
+    throw new Error(
+      "Messages didn't answer. The first send from a new app or ssh needs a one-time OK: " +
+        "check for a prompt on the Mac, or System Settings › Privacy & Security › Automation.",
+    );
   }
+  if (code !== 0) throw new Error(`Messages couldn't send: ${(await new Response(proc.stderr).text()).trim()}`);
 }
