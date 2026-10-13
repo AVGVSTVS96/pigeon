@@ -193,8 +193,7 @@ export function imessage(options: IMessageOptions = {}) {
         where.push("cmj.message_date < $until");
         params.$until = toAppleTime(until);
       }
-      const rows = open()
-        .query<MessageRow, Record<string, string | number>>(
+      const statement = open().prepare<MessageRow, Record<string, string | number>>(
           `SELECT ${MESSAGE_COLUMNS}
            FROM chat_message_join cmj
            JOIN message m ON m.ROWID = cmj.message_id
@@ -202,14 +201,17 @@ export function imessage(options: IMessageOptions = {}) {
            LEFT JOIN handle h ON h.ROWID = m.handle_id
            WHERE ${where.join(" AND ")}
            ORDER BY cmj.message_date DESC, cmj.message_id DESC`,
-        )
-        .iterate(params);
+      );
       const seen = new Set<number>();
-      for (const row of rows) {
-        if (seen.has(row.rowid)) continue;
-        seen.add(row.rowid);
-        const message = toMessage(row);
-        if (message) yield message;
+      try {
+        for (const row of statement.iterate(params)) {
+          if (seen.has(row.rowid)) continue;
+          seen.add(row.rowid);
+          const message = toMessage(row);
+          if (message) yield message;
+        }
+      } finally {
+        statement.finalize();
       }
     },
 

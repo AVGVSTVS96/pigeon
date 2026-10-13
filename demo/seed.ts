@@ -38,7 +38,7 @@ await Bun.write(
   `export default ({ imessage, redact }) => ({
   sources: [imessage({ db: ${JSON.stringify(fake.path)}, contacts: ${JSON.stringify(contacts)} })],
   filters: [
-    redact({ chat: "Riley Quinn", match: /purple-otter-\\d+/ }),
+    redact({ chat: "+12125550102", match: /purple-otter-\\d+/ }),
   ],
 });
 `,

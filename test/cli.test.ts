@@ -105,6 +105,15 @@ describe("cli", () => {
     expect(stderr).toContain("filters must be an array of functions");
   });
 
+  test("a config that hides nothing by mistake is an error, not a silent no-op", async () => {
+    const named = await pigeon(["read"], config(`export const config = { filters: [] };`));
+    expect(named).toMatchObject({ code: 1, stdout: "" });
+    expect(named.stderr).toContain("no default export");
+    const typo = await pigeon(["read"], config(`export default ({ redact }) => ({ filter: [redact({})] });`));
+    expect(typo).toMatchObject({ code: 1, stdout: "" });
+    expect(typo.stderr).toContain("unknown config keys: filter");
+  });
+
   test("errors are one line on stderr", async () => {
     expect(await pigeon(["read", "nobody"])).toEqual({ stdout: "", stderr: 'pigeon: no chat matches "nobody"\n', code: 1 });
   });

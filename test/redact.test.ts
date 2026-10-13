@@ -35,9 +35,8 @@ describe("redact", () => {
     expect(redact({ chat: "+12125550199" })(message())).toBe(true);
   });
 
-  test("matches a chat by its exact name", () => {
-    expect(redact({ chat: "riley" })(message())).toMatchObject({ redacted: true });
-    expect(redact({ chat: "Ril" })(message())).toBe(true);
+  test("matches chats by id only, since names can change under a rule", () => {
+    expect(redact({ chat: "Riley" })(message())).toBe(true);
   });
 
   test("narrows by sender, including me", () => {
@@ -46,9 +45,25 @@ describe("redact", () => {
   });
 
   test("hides only matching strings, case-insensitively for plain strings", () => {
-    const rule = redact({ match: ["GATE CODE", /\d{4}/] });
-    expect(rule(message())).toEqual({ ...message(), text: `the ${REDACTED} is ${REDACTED}`, redacted: true });
+    const rule = redact({ match: ["GATE CODE", /\d{5}/] });
+    expect(rule(message())).toEqual({ ...message(), text: `the ${REDACTED} is 4321`, redacted: true });
     expect(rule(message({ text: "nothing here" }))).toBe(true);
+  });
+
+  test("hides attachments whose names match", () => {
+    expect(redact({ match: "img_0001" })(message({ text: "here" }))).toEqual({
+      ...message({ text: "here" }),
+      attachments: [{ name: REDACTED }],
+      redacted: true,
+    });
+  });
+
+  test("ignores a regex's sticky flag and leftover lastIndex", () => {
+    const sticky = /\d{4}/y;
+    expect(redact({ match: sticky })(message())).toMatchObject({ text: `the gate code is ${REDACTED}` });
+    const reused = /\d{4}/g;
+    reused.test("9999 4321");
+    expect(redact({ match: reused })(message())).toMatchObject({ text: `the gate code is ${REDACTED}` });
   });
 
   test("merges overlapping matches into one marker", () => {

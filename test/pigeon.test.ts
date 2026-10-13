@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import { defineSource } from "../src/define.ts";
 import { pigeon } from "../src/pigeon.ts";
 import { REDACTED, redact } from "../src/redact.ts";
-import type { Chat, Message } from "../src/types.ts";
+import type { Chat, Filter, Message } from "../src/types.ts";
 
 const at = (hour: number) => new Date(2026, 9, 6, hour);
 
@@ -93,6 +93,10 @@ describe("pigeon messages", () => {
       expect(error).toHaveBeenCalledTimes(1);
       const junk = pigeon({ sources: [imsg], filters: [() => undefined as unknown as boolean] });
       expect(await all(junk.messages())).toEqual([]);
+      const async = pigeon({ sources: [imsg], filters: [(async (m: Message) => m) as unknown as Filter] });
+      expect(await all(async.messages())).toEqual([]);
+      const partial = pigeon({ sources: [imsg], filters: [(m) => ({ text: m.text }) as Message] });
+      expect(await all(partial.messages())).toEqual([]);
     } finally {
       console.error = original;
     }
@@ -153,5 +157,6 @@ describe("pigeon send", () => {
       ["+12125550100", "new number"],
     ]);
     await expect(p.send("work", { text: "x" })).rejects.toThrow("telegram can't send messages");
+    await expect(p.send("rile", { text: "x" })).rejects.toThrow('no chat matches "rile"');
   });
 });

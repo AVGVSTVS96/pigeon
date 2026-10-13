@@ -52,7 +52,7 @@ pigeon search dinner sunday  # messages with every word, newest 30
 pigeon search pie -c mom     # ...in one chat
 pigeon watch                 # new messages, live
 pigeon watch --json | jq .   # ...as JSON lines
-pigeon send mom "landed!"    # send a message
+pigeon send mom "landed!"    # send a message (to an id or a chat's full name)
 pigeon send mom -f pie.jpg   # send a file
 echo "on my way" | pigeon send +12125550101
 pigeon config                # which config loaded, and how many filters
@@ -137,8 +137,12 @@ filters allow.
 
 pigeon fails closed. A filter that throws drops the message it threw on. A
 config that fails to load stops pigeon with an error instead of running
-without its filters. Search runs *after* filters, so hidden text can't be
-found by searching for it.
+without its filters, and so does one with a typo in it (`filter:` instead of
+`filters:`). Search runs *after* filters, so hidden text can't be found by
+searching for it.
+
+Filters apply to messages. `pigeon chats` still lists every chat, with its
+name, people and the time of its last message.
 
 ### Redact
 
@@ -148,7 +152,7 @@ something was said, and when, but not what. Every field narrows the rule:
 
 ```ts
 redact({ chat: "+12125550102" })                     // a whole chat
-redact({ chat: "Book club", on: "2026-10-06" })      // one day of a group, by name
+redact({ chat: "chat204", on: "2026-10-06" })        // one day of a group chat
 redact({ from: "+12125550102", since: "2026-09-01" }) // one person, from a date on
 redact({ from: "me", until: "2020-01-01" })          // everything you sent before 2020
 redact({ match: ["gate code", /\d{4}/] })            // just these strings, everywhere
@@ -156,14 +160,16 @@ redact({ match: ["gate code", /\d{4}/] })            // just these strings, ever
 
 | Field | Matches |
 | ----- | ------- |
-| `chat` | a chat id or its exact name (one or a list) |
+| `chat` | a chat id (one or a list): a phone number or email for 1:1 chats, the id from `pigeon chats` for groups |
 | `from` | a sender's handle, or `"me"` (one or a list) |
 | `on` | a whole day, local time: `"2026-10-06"` |
 | `since` / `until` | a time range: a `Date`, a timestamp, or a date string |
-| `match` | strings (case-insensitive) or regexes to hide; without it, the whole message is hidden along with its attachments |
+| `match` | strings (case-insensitive) or regexes to hide in the text and attachment names; without it, the whole message is hidden along with its attachments |
 
 Phone numbers match however they're written, so `"212-555-0102"` and
-`"+12125550102"` are the same person.
+`"+12125550102"` are the same person. Rules take ids, not names: a contact
+or group can be renamed, and a rule that quietly stopped matching would show
+everything it was hiding.
 
 ### Sources
 

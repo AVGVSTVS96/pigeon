@@ -7,7 +7,10 @@ export const REDACTED = "[redacted]";
 type OneOrMany<T> = T | T[];
 
 export interface RedactRule {
-  /** Chat id or exact chat name. For a 1:1 iMessage chat, the id is the person's number or email. */
+  /**
+   * Chat id. For a 1:1 iMessage chat that's the person's number or email; `pigeon chats` shows group ids.
+   * Names aren't accepted: they change, and a rule that silently stops matching would show what it hid.
+   */
   chat?: OneOrMany<string>;
   /** Sender handle, or `"me"`. */
   from?: OneOrMany<string>;
@@ -27,9 +30,10 @@ function escape(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/** Always a fresh global regex: a caller's sticky flag or leftover lastIndex would skip matches. */
 function toPattern(match: string | RegExp): RegExp {
   if (typeof match === "string") return new RegExp(escape(match), "gi");
-  return match.global ? match : new RegExp(match.source, match.flags + "g");
+  return new RegExp(match.source, match.flags.replace(/[gy]/g, "") + "g");
 }
 
 /** Replaces every match of every pattern, merging overlaps so each hidden span reads as one marker. */
@@ -60,8 +64,7 @@ export function redact(rule: RedactRule): Filter {
   const patterns = list(rule.match).map(toPattern);
 
   const applies = (m: Message) =>
-    (chats.length === 0 ||
-      chats.some((c) => sameHandle(c, m.chat.id) || c.toLowerCase() === m.chat.name.toLowerCase())) &&
+    (chats.length === 0 || chats.some((c) => sameHandle(c, m.chat.id))) &&
     (senders.length === 0 || senders.some((s) => sameHandle(s, m.from.id))) &&
     (since === undefined || m.date >= since) &&
     (until === undefined || m.date < until);
@@ -70,6 +73,8 @@ export function redact(rule: RedactRule): Filter {
     if (!applies(m)) return true;
     if (patterns.length === 0) return { ...m, text: REDACTED, attachments: [], redacted: true };
     const text = hide(m.text, patterns);
-    return text === m.text ? true : { ...m, text, redacted: true };
+    const attachments = m.attachments.map((a) => (hide(a.name, patterns) === a.name ? a : { name: REDACTED }));
+    const changed = text !== m.text || attachments.some((a, i) => a !== m.attachments[i]);
+    return changed ? { ...m, text, attachments, redacted: true } : true;
   };
 }

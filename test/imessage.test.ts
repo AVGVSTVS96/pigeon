@@ -97,6 +97,19 @@ describe("imessage messages", () => {
     expect(reply?.replyTo).toBe(first.guid);
   });
 
+  test("each call reads from the newest message, even after an earlier read stopped early", async () => {
+    const take = async (n: number) => {
+      const out: string[] = [];
+      for (const m of source.messages({}) as Iterable<Message>) {
+        out.push(m.text);
+        if (out.length === n) break;
+      }
+      return out;
+    };
+    expect(await take(2)).toEqual(["chapter 3 tonight", "nice"]);
+    expect(await take(3)).toEqual(["chapter 3 tonight", "nice", ""]);
+  });
+
   test("explains how to fix a database it can't open", () => {
     const missing = imessage({ db: "/nonexistent/chat.db", contacts: false });
     expect(() => missing.chats()).toThrow(/Full Disk Access/);

@@ -29,6 +29,8 @@ export async function findConfig(): Promise<string | undefined> {
 
 function validate(raw: unknown, path: string): Config {
   if (!raw || typeof raw !== "object") throw new Error(`${path} must export a config object or a function returning one`);
+  const unknown = Object.keys(raw).filter((key) => key !== "sources" && key !== "filters");
+  if (unknown.length > 0) throw new Error(`${path}: unknown config keys: ${unknown.join(", ")} (expected sources, filters)`);
   const { sources, filters } = raw as Config;
   if (filters !== undefined && !(Array.isArray(filters) && filters.every((f) => typeof f === "function"))) {
     throw new Error(`${path}: filters must be an array of functions`);
@@ -54,7 +56,8 @@ export async function loadConfig(): Promise<Config> {
   let raw: unknown;
   try {
     const mod = await import(pathToFileURL(path).href);
-    raw = typeof mod.default === "function" ? await (mod.default as ConfigFactory)(configApi) : (mod.default ?? mod);
+    if (mod.default === undefined) throw new Error("it has no default export");
+    raw = await (typeof mod.default === "function" ? (mod.default as ConfigFactory)(configApi) : mod.default);
   } catch (err) {
     throw new Error(`couldn't load ${path}: ${err instanceof Error ? err.message : err}`);
   }

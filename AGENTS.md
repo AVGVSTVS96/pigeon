@@ -72,6 +72,17 @@ message, drops that message. A config that fails to import or has the wrong
 shape is fatal: `loadConfig` throws and the CLI exits 1 with nothing on
 stdout. Never "log and continue without the config" like most tools do.
 
+**Rules target ids, never names.** `redact({ chat })` matches chat ids only.
+Names come from Contacts, which can be unreadable or renamed, and a rule that
+silently stops matching shows what it hid. Configs are strict for the same
+reason: no default export or an unknown key is a load error.
+
+**Filters apply to messages, not the chat list.** `chats()` is metadata
+(names, people, last activity) and is documented as unfiltered.
+
+**`send` never guesses.** It takes an id or an exact name; partial name
+matches are for reading only, since a wrong guess texts the wrong people.
+
 **Search runs after filters.** Matching raw text first would let a search
 reveal what a redaction hides. A source may pre-filter for speed, but the core
 always re-matches the filtered text.

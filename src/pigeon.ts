@@ -80,6 +80,11 @@ function matcher(text: string | undefined): (message: Message) => boolean {
   };
 }
 
+function isMessage(value: unknown): value is Message {
+  const m = value as Message | null;
+  return !!m && typeof m === "object" && typeof m.text === "string" && m.date instanceof Date && Array.isArray(m.attachments);
+}
+
 /**
  * Runs every filter in order. A filter that throws or returns anything but
  * `true` or a message drops the message: when in doubt, nothing leaks.
@@ -98,8 +103,8 @@ function screener(filters: Filter[]): (message: Message) => Message | undefined 
         return undefined;
       }
       if (result === true) continue;
-      if (!result || typeof result !== "object") return undefined;
-      current = result as Message;
+      if (!isMessage(result)) return undefined;
+      current = result;
     }
     return current;
   };
@@ -120,15 +125,18 @@ export function pigeon({ sources = [imessage()], filters = [] }: Config = {}): P
     return lists.flat().sort((a, b) => (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0));
   }
 
-  async function findChats(ref: string): Promise<Chat[]> {
+  /** By id, then exact name, then (unless `exact`) part of a name. */
+  async function lookup(ref: string, exact: boolean): Promise<Chat[]> {
     const all = await chats();
     const needle = ref.trim().toLowerCase();
     const byId = all.filter((c) => sameHandle(c.id, ref));
     if (byId.length > 0) return byId;
     const byName = all.filter((c) => c.name.toLowerCase() === needle);
-    if (byName.length > 0) return byName;
+    if (byName.length > 0 || exact) return byName;
     return all.filter((c) => c.name.toLowerCase().includes(needle));
   }
+
+  const findChats = (ref: string) => lookup(ref, false);
 
   async function chat(ref: string): Promise<Chat> {
     const found = await findChats(ref);
@@ -165,8 +173,9 @@ export function pigeon({ sources = [imessage()], filters = [] }: Config = {}): P
     }
   }
 
+  /** Only an id or an exact name: a partial match could text the wrong people. */
   async function send(ref: string, message: Outgoing): Promise<void> {
-    const found = await findChats(ref);
+    const found = await lookup(ref, true);
     const target = found.length > 0 ? only(found, ref) : undefined;
     const source = target ? sourceOf(target) : isPhone(ref) || ref.includes("@") ? sources.find((s) => s.send) : undefined;
     if (!source) throw new Error(`no chat matches "${ref}"`);
