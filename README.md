@@ -91,8 +91,9 @@ conversation. Dates are local time, in text and in JSON.
 ```
 
 `from.id` is `"me"` for messages you sent. `replyTo` holds the id of the
-message being replied to, and `attachments` entries have a `name` plus a
-`path` and `mime` when known.
+message being replied to. `attachments` entries have a `name`, a `mime`
+when known, and a `path` when the file is on this Mac (with Messages in
+iCloud, older files may only be in the cloud).
 
 </details>
 

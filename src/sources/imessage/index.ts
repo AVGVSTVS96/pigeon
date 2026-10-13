@@ -1,5 +1,5 @@
 import { Database, type Statement } from "bun:sqlite";
-import { watch as watchDir } from "node:fs";
+import { existsSync, watch as watchDir } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { handleKey, isPhone } from "../../handles.ts";
@@ -141,11 +141,15 @@ export function imessage(options: IMessageOptions = {}) {
     return attachmentQuery
       .all(rowid)
       .filter((a) => !a.name?.endsWith(".pluginPayloadAttachment"))
-      .map((a) => ({
-        name: a.name ?? a.filename?.split("/").pop() ?? "attachment",
-        ...(a.filename && { path: expandHome(a.filename) }),
-        ...(a.mime && { mime: a.mime }),
-      }));
+      .map((a) => {
+        // With Messages in iCloud, older files often live only in the cloud.
+        const path = a.filename ? expandHome(a.filename) : undefined;
+        return {
+          name: a.name ?? path?.split("/").pop() ?? "attachment",
+          ...(path && existsSync(path) && { path }),
+          ...(a.mime && { mime: a.mime }),
+        };
+      });
   };
 
   const toMessage = (row: MessageRow): Message | undefined => {

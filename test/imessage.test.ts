@@ -1,4 +1,6 @@
 import { beforeAll, describe, expect, test } from "bun:test";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { imessage } from "../src/sources/imessage/index.ts";
 import type { Message } from "../src/types.ts";
 import { fakeChatDb, fakeContacts } from "./fixture.ts";
@@ -76,12 +78,10 @@ describe("imessage messages", () => {
     expect(texts.some((t) => t.includes("Loved"))).toBe(false);
   });
 
-  test("lists attachments and drops the placeholder character", async () => {
+  test("lists attachments, with a path only when the file is on this machine", async () => {
     const [photo] = await all(source.messages({ chat: "chat900", until: day(5) }));
     expect(photo?.text).toBe("");
-    expect(photo?.attachments).toEqual([
-      { name: "IMG_0001.heic", path: expect.stringMatching(/\/Library\/Messages\/Attachments\/00\/IMG_0001\.heic$/), mime: "image/heic" },
-    ]);
+    expect(photo?.attachments).toEqual([{ name: "IMG_0001.heic", mime: "image/heic" }, { name: "IMG_0002.jpg", path: saved }]);
   });
 
   test("keeps the id of the message being replied to", async () => {

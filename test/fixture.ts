@@ -44,7 +44,7 @@ export interface FakeMessage {
   bodyOnly?: boolean;
   date: Date;
   service?: string;
-  attachments?: { name: string; mime?: string }[];
+  attachments?: { name: string; mime?: string; path?: string }[];
   reactionTo?: string;
   itemType?: number;
   replyTo?: string;
@@ -117,7 +117,7 @@ export function fakeChatDb(dir = mkdtempSync(join(tmpdir(), "pigeon-"))) {
       for (const a of m.attachments ?? []) {
         const attachment = db
           .query("INSERT INTO attachment (filename, mime_type, transfer_name) VALUES (?, ?, ?)")
-          .run(`~/Library/Messages/Attachments/00/${a.name}`, a.mime ?? null, a.name).lastInsertRowid;
+          .run(a.path ?? `~/Library/Messages/Attachments/00/${a.name}`, a.mime ?? null, a.name).lastInsertRowid;
         db.query("INSERT INTO message_attachment_join VALUES (?, ?)").run(rowid, attachment);
       }
       return { rowid, guid: id };
