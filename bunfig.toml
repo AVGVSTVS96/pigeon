@@ -1,2 +1,6 @@
+[install]
+linker = "isolated"
+exact = true
+
 [test]
 preload = ["./test/scratch.ts"]

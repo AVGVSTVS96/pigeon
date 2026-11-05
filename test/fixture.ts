@@ -1,25 +1,38 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
+
 import archives from "./fixtures/attributed-body.json";
+
+export { default as archives } from "./fixtures/attributed-body.json";
 
 const APPLE_EPOCH_MS = 978_307_200_000;
 const appleTime = (date: Date) => (date.getTime() - APPLE_EPOCH_MS) * 1e6;
 
-const hex = (h: string) => Uint8Array.from(h.match(/../g)!, (b) => parseInt(b, 16));
+export const hex = (h: string) =>
+  Uint8Array.from(h.match(/../gu) ?? [], (b) => Number.parseInt(b, 16));
 
-/** A real NSArchiver blob for "hello", re-framed around any text. */
-export function encodeBody(text: string): Uint8Array {
-  const hello = hex(archives[0]!.hex);
+const ONE_BYTE_MAX = 0x80;
+const TWO_BYTE_LENGTH = 0x81;
+
+const lengthPrefix = (length: number) =>
+  length < ONE_BYTE_MAX
+    ? [length]
+    : [TWO_BYTE_LENGTH, length % 256, Math.floor(length / 256) % 256];
+
+export const encodeBody = (text: string): Uint8Array => {
+  const hello = hex(archives[0]?.hex ?? "");
   const at = hello.findIndex((b, i) => b === 0x01 && hello[i + 1] === 0x2b) + 2;
   const bytes = new TextEncoder().encode(text);
-  const length =
-    bytes.length < 0x80 ? [bytes.length] : [0x81, bytes.length & 0xff, (bytes.length >> 8) & 0xff];
-  return new Uint8Array([...hello.subarray(0, at), ...length, ...bytes, ...hello.subarray(at + 1 + 5)]);
-}
 
-export { archives, hex };
+  return new Uint8Array([
+    ...hello.subarray(0, at),
+    ...lengthPrefix(bytes.length),
+    ...bytes,
+    ...hello.subarray(at + 1 + 5),
+  ]);
+};
 
 const SCHEMA = `
   CREATE TABLE handle (ROWID INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL, service TEXT NOT NULL);
@@ -37,10 +50,8 @@ const SCHEMA = `
 
 export interface FakeMessage {
   chat: number;
-  /** A handle, or "me". */
   from: string;
   text?: string;
-  /** Store the text only in attributedBody, like newer macOS does. */
   bodyOnly?: boolean;
   date: Date;
   service?: string;
@@ -48,28 +59,39 @@ export interface FakeMessage {
   reactionTo?: string;
   itemType?: number;
   replyTo?: string;
-  /** Write the message without linking it to its chat yet. */
   unlinked?: boolean;
 }
 
-/** A chat.db with the tables pigeon reads, filled with made-up people. */
-export function fakeChatDb(dir = mkdtempSync(join(tmpdir(), "pigeon-"))) {
+export const fakeChatDb = (dir = mkdtempSync(path.join(tmpdir(), "pigeon-"))) => {
   mkdirSync(dir, { recursive: true });
-  const path = join(dir, "chat.db");
-  const db = new Database(path, { create: true });
-  db.exec("PRAGMA journal_mode = WAL");
-  db.exec(SCHEMA);
+  const file = path.join(dir, "chat.db");
+  const db = new Database(file, { create: true });
+
+  db.run("PRAGMA journal_mode = WAL");
+  db.run(SCHEMA);
   let guid = 0;
 
   const handle = (id: string, service = "iMessage") =>
-    db.query<{ ROWID: number }, [string, string]>("SELECT ROWID FROM handle WHERE id = ? AND service = ?").get(id, service)
-      ?.ROWID ?? Number(db.query("INSERT INTO handle (id, service) VALUES (?, ?)").run(id, service).lastInsertRowid);
+    db
+      .query<{ ROWID: number }, [string, string]>(
+        "SELECT ROWID FROM handle WHERE id = ? AND service = ?",
+      )
+      .get(id, service)?.ROWID ??
+    Number(
+      db.query("INSERT INTO handle (id, service) VALUES (?, ?)").run(id, service).lastInsertRowid,
+    );
 
   return {
     dir,
-    path,
+    path: file,
     db,
-    chat({ id, handles = [id], name, group = false, service = "iMessage" }: {
+    chat({
+      id,
+      handles = [id],
+      name,
+      group = false,
+      service = "iMessage",
+    }: {
       id: string;
       handles?: string[];
       name?: string;
@@ -78,19 +100,31 @@ export function fakeChatDb(dir = mkdtempSync(join(tmpdir(), "pigeon-"))) {
     }): number {
       const rowid = Number(
         db
-          .query("INSERT INTO chat (guid, style, chat_identifier, service_name, display_name) VALUES (?, ?, ?, ?, ?)")
-          .run(`${service};${group ? "+" : "-"};${id}`, group ? 43 : 45, id, service, name ?? null).lastInsertRowid,
+          .query(
+            "INSERT INTO chat (guid, style, chat_identifier, service_name, display_name) VALUES (?, ?, ?, ?, ?)",
+          )
+          .run(`${service};${group ? "+" : "-"};${id}`, group ? 43 : 45, id, service, name ?? null)
+          .lastInsertRowid,
       );
-      for (const h of handles) db.query("INSERT INTO chat_handle_join VALUES (?, ?)").run(rowid, handle(h, service));
+
+      for (const h of handles) {
+        db.query("INSERT INTO chat_handle_join VALUES (?, ?)").run(rowid, handle(h, service));
+      }
+
       return rowid;
     },
     link(message: number, chat: number) {
-      const date = db.query<{ date: number }, [number]>("SELECT date FROM message WHERE ROWID = ?").get(message)!.date;
-      db.query("INSERT INTO chat_message_join VALUES (?, ?, ?)").run(chat, message, date);
+      const row = db
+        .query<{ date: number }, [number]>("SELECT date FROM message WHERE ROWID = ?")
+        .get(message);
+
+      db.query("INSERT INTO chat_message_join VALUES (?, ?, ?)").run(chat, message, row?.date ?? 0);
     },
-    message(m: FakeMessage): { rowid: number; guid: string } {
-      const id = `GUID-${++guid}`;
+    message(m: FakeMessage) {
+      guid += 1;
+      const id = `GUID-${guid}`;
       const fromMe = m.from === "me";
+
       const rowid = Number(
         db
           .query(
@@ -100,46 +134,72 @@ export function fakeChatDb(dir = mkdtempSync(join(tmpdir(), "pigeon-"))) {
           )
           .run(
             id,
-            m.bodyOnly ? null : (m.text ?? null),
+            m.bodyOnly === true ? null : (m.text ?? null),
             fromMe ? 0 : handle(m.from, m.service ?? "iMessage"),
             m.text === undefined ? null : encodeBody(m.text),
             m.service ?? "iMessage",
             appleTime(m.date),
             fromMe ? 1 : 0,
             m.itemType ?? 0,
-            m.reactionTo ? `p:0/${m.reactionTo}` : null,
-            m.reactionTo ? 2000 : 0,
-            m.attachments?.length ? 1 : 0,
+            m.reactionTo === undefined ? null : `p:0/${m.reactionTo}`,
+            m.reactionTo === undefined ? 0 : 2000,
+            (m.attachments?.length ?? 0) > 0 ? 1 : 0,
             m.replyTo ?? null,
           ).lastInsertRowid,
       );
-      if (!m.unlinked) this.link(rowid, m.chat);
+
+      if (m.unlinked !== true) {
+        this.link(rowid, m.chat);
+      }
+
       for (const a of m.attachments ?? []) {
         const attachment = db
           .query("INSERT INTO attachment (filename, mime_type, transfer_name) VALUES (?, ?, ?)")
-          .run(a.path ?? `~/Library/Messages/Attachments/00/${a.name}`, a.mime ?? null, a.name).lastInsertRowid;
+          .run(
+            a.path ?? `~/Library/Messages/Attachments/00/${a.name}`,
+            a.mime ?? null,
+            a.name,
+          ).lastInsertRowid;
+
         db.query("INSERT INTO message_attachment_join VALUES (?, ?)").run(rowid, attachment);
       }
+
       return { rowid, guid: id };
     },
   };
-}
+};
 
-/** A Contacts database in the layout macOS keeps under ~/Library/Application Support/AddressBook. */
-export function fakeContacts(people: { first: string; last?: string; phones?: string[]; emails?: string[] }[]) {
-  const root = mkdtempSync(join(tmpdir(), "pigeon-ab-"));
-  mkdirSync(join(root, "Sources", "A"), { recursive: true });
-  const db = new Database(join(root, "Sources", "A", "AddressBook-v22.abcddb"), { create: true });
-  db.exec(`
+export const fakeContacts = (
+  people: { first: string; last?: string; phones?: string[]; emails?: string[] }[],
+) => {
+  const root = mkdtempSync(path.join(tmpdir(), "pigeon-ab-"));
+
+  mkdirSync(path.join(root, "Sources", "A"), { recursive: true });
+
+  const db = new Database(path.join(root, "Sources", "A", "AddressBook-v22.abcddb"), {
+    create: true,
+  });
+
+  db.run(`
     CREATE TABLE ZABCDRECORD (Z_PK INTEGER PRIMARY KEY, ZFIRSTNAME TEXT, ZLASTNAME TEXT, ZNICKNAME TEXT, ZORGANIZATION TEXT);
     CREATE TABLE ZABCDPHONENUMBER (Z_PK INTEGER PRIMARY KEY, ZOWNER INTEGER, ZFULLNUMBER TEXT);
     CREATE TABLE ZABCDEMAILADDRESS (Z_PK INTEGER PRIMARY KEY, ZOWNER INTEGER, ZADDRESS TEXT);`);
+
   for (const p of people) {
-    const id = db.query("INSERT INTO ZABCDRECORD (ZFIRSTNAME, ZLASTNAME) VALUES (?, ?)").run(p.first, p.last ?? null)
-      .lastInsertRowid;
-    for (const phone of p.phones ?? []) db.query("INSERT INTO ZABCDPHONENUMBER (ZOWNER, ZFULLNUMBER) VALUES (?, ?)").run(id, phone);
-    for (const email of p.emails ?? []) db.query("INSERT INTO ZABCDEMAILADDRESS (ZOWNER, ZADDRESS) VALUES (?, ?)").run(id, email);
+    const id = db
+      .query("INSERT INTO ZABCDRECORD (ZFIRSTNAME, ZLASTNAME) VALUES (?, ?)")
+      .run(p.first, p.last ?? null).lastInsertRowid;
+
+    for (const phone of p.phones ?? []) {
+      db.query("INSERT INTO ZABCDPHONENUMBER (ZOWNER, ZFULLNUMBER) VALUES (?, ?)").run(id, phone);
+    }
+
+    for (const email of p.emails ?? []) {
+      db.query("INSERT INTO ZABCDEMAILADDRESS (ZOWNER, ZADDRESS) VALUES (?, ?)").run(id, email);
+    }
   }
+
   db.close();
+
   return root;
-}
+};

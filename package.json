@@ -2,26 +2,49 @@
   "name": "@avgvstvs96/pigeon",
   "version": "0.1.0",
   "description": "Your messages, from the terminal. An iMessage CLI with pluggable sources and filters.",
+  "keywords": [
+    "agents",
+    "chat.db",
+    "cli",
+    "imessage",
+    "messages",
+    "redaction"
+  ],
   "license": "MIT",
-  "type": "module",
   "repository": "github:AVGVSTVS96/pigeon",
-  "keywords": ["imessage", "messages", "cli", "chat.db", "agents", "redaction"],
   "bin": {
     "pigeon": "src/cli/main.ts"
   },
+  "files": [
+    "src",
+    "examples",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
-  "files": ["src", "examples", "skills", "README.md", "LICENSE"],
-  "engines": {
-    "bun": ">=1.3"
-  },
   "scripts": {
+    "check": "oxlint && oxfmt --check && tsc && bun test",
+    "fix": "oxlint --fix; oxfmt",
+    "prepare": "lefthook install",
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.14",
-    "typescript": "^5.9.3"
-  }
+    "@oxlint/plugins": "1.91.0",
+    "@types/bun": "1.4.4",
+    "lefthook": "2.2.2",
+    "oxfmt": "0.76.0",
+    "oxlint": "1.91.0",
+    "oxlint-tsgolint": "7.0.2006",
+    "typescript": "7.0.2",
+    "ultracite": "8.1.1"
+  },
+  "engines": {
+    "bun": ">=1.4"
+  },
+  "packageManager": "bun@1.4.3"
 }

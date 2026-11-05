@@ -1,8 +1,9 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+
 import { imessage } from "../src/sources/imessage/index.ts";
-import type { Message } from "../src/types.ts";
+import type { Chat, Message } from "../src/types.ts";
 import { fakeChatDb, fakeContacts } from "./fixture.ts";
 
 const RILEY = "+12125550100";
@@ -14,38 +15,82 @@ const rileyIm = fake.chat({ id: RILEY });
 const rileySms = fake.chat({ id: RILEY, service: "SMS" });
 const group = fake.chat({ id: "chat900", handles: [RILEY, SAM], group: true });
 const named = fake.chat({ id: "chat901", handles: [SAM], group: true, name: "Book club" });
+
 fake.chat({ id: "+12125550111" });
 
 const first = fake.message({ chat: rileyIm, from: RILEY, text: "hey", date: day(1) });
+
 fake.message({ chat: rileySms, from: RILEY, text: "sent over sms", service: "SMS", date: day(2) });
-fake.message({ chat: rileyIm, from: "me", text: "new macOS keeps text here", bodyOnly: true, date: day(3) });
-fake.message({ chat: rileyIm, from: RILEY, text: "Loved “hey”", reactionTo: first.guid, date: day(3, 13) });
+
+fake.message({
+  chat: rileyIm,
+  from: "me",
+  text: "new macOS keeps text here",
+  bodyOnly: true,
+  date: day(3),
+});
+
+fake.message({
+  chat: rileyIm,
+  from: RILEY,
+  text: "Loved “hey”",
+  reactionTo: first.guid,
+  date: day(3, 13),
+});
+
 fake.message({ chat: rileyIm, from: RILEY, date: day(3, 14), itemType: 1 });
-const saved = join(fake.dir, "IMG_0002.jpg");
+
+const saved = path.join(fake.dir, "IMG_0002.jpg");
+
 writeFileSync(saved, "");
+
 fake.message({
   chat: group,
   from: SAM,
   text: "\uFFFC\uFFFC",
-  attachments: [{ name: "IMG_0001.heic", mime: "image/heic" }, { name: "IMG_0002.jpg", path: saved }],
+  attachments: [
+    { name: "IMG_0001.heic", mime: "image/heic" },
+    { name: "IMG_0002.jpg", path: saved },
+  ],
   date: day(4),
 });
+
 fake.message({ chat: group, from: RILEY, text: "nice", replyTo: first.guid, date: day(5) });
+
 fake.message({ chat: named, from: SAM, text: "chapter 3 tonight", date: day(6) });
 
 const contacts = fakeContacts([{ first: "Riley", last: "Quinn", phones: ["(212) 555-0100"] }]);
 const source = imessage({ db: fake.path, contacts });
 
-async function all(stream: AsyncIterable<Message> | Iterable<Message>): Promise<Message[]> {
+const all = async (stream: AsyncIterable<Message> | Iterable<Message>): Promise<Message[]> => {
   const out: Message[] = [];
-  for await (const m of stream) out.push(m);
+
+  for await (const m of stream) {
+    out.push(m);
+  }
+
   return out;
-}
+};
+
+const take = (n: number) => {
+  const out: string[] = [];
+
+  for (const m of source.messages({})) {
+    out.push(m.text);
+
+    if (out.length === n) {
+      break;
+    }
+  }
+
+  return out;
+};
 
 describe("imessage chats", () => {
-  let chats: Awaited<ReturnType<typeof source.chats>>;
-  beforeAll(async () => {
-    chats = await source.chats();
+  let chats: Chat[] = [];
+
+  beforeAll(() => {
+    chats = source.chats();
   });
 
   test("merges a person's iMessage and SMS threads into one chat, like Messages does", () => {
@@ -54,7 +99,11 @@ describe("imessage chats", () => {
 
   test("names chats from Contacts, group names, or their members", () => {
     const byId = Object.fromEntries(chats.map((c) => [c.id, c]));
-    expect(byId[RILEY]).toMatchObject({ name: "Riley Quinn", group: false, people: [{ id: RILEY, name: "Riley Quinn" }] });
+    expect(byId[RILEY]).toMatchObject({
+      name: "Riley Quinn",
+      group: false,
+      people: [{ id: RILEY, name: "Riley Quinn" }],
+    });
     expect(byId.chat900).toMatchObject({ name: `Riley Quinn, ${SAM}`, group: true });
     expect(byId.chat901?.name).toBe("Book club");
   });
@@ -64,10 +113,32 @@ describe("imessage chats", () => {
   });
 });
 
+const snapshot = (file: string) =>
+  ["", "-wal", "-shm"].map((suffix) =>
+    existsSync(file + suffix) ? Bun.hash(readFileSync(file + suffix)) : 0,
+  );
+
 describe("imessage messages", () => {
+  test("reading never writes to chat.db", async () => {
+    const before = snapshot(fake.path);
+    const reader = imessage({ db: fake.path, contacts: false });
+
+    reader.chats();
+    await all(reader.messages({}));
+    expect(snapshot(fake.path)).toEqual(before);
+  });
+
   test("streams newest first across every chat", async () => {
-    const texts = (await all(source.messages({}))).map((m) => m.text);
-    expect(texts).toEqual(["chapter 3 tonight", "nice", "", "new macOS keeps text here", "sent over sms", "hey"]);
+    const messages = await all(source.messages({}));
+    const texts = messages.map((m) => m.text);
+    expect(texts).toEqual([
+      "chapter 3 tonight",
+      "nice",
+      "",
+      "new macOS keeps text here",
+      "sent over sms",
+      "hey",
+    ]);
   });
 
   test("reads one chat across services", async () => {
@@ -78,18 +149,25 @@ describe("imessage messages", () => {
 
   test("decodes text that only lives in attributedBody", async () => {
     const [mine] = await all(source.messages({ chat: RILEY, since: day(3), until: day(4) }));
-    expect(mine).toMatchObject({ text: "new macOS keeps text here", from: { id: "me", name: "me" } });
+    expect(mine).toMatchObject({
+      text: "new macOS keeps text here",
+      from: { id: "me", name: "me" },
+    });
   });
 
   test("never surfaces tapbacks, which quote the message they react to", async () => {
-    const texts = (await all(source.messages({}))).map((m) => m.text);
+    const messages = await all(source.messages({}));
+    const texts = messages.map((m) => m.text);
     expect(texts.some((t) => t.includes("Loved"))).toBe(false);
   });
 
   test("lists attachments, with a path only when the file is on this machine", async () => {
     const [photo] = await all(source.messages({ chat: "chat900", until: day(5) }));
     expect(photo?.text).toBe("");
-    expect(photo?.attachments).toEqual([{ name: "IMG_0001.heic", mime: "image/heic" }, { name: "IMG_0002.jpg", path: saved }]);
+    expect(photo?.attachments).toEqual([
+      { name: "IMG_0001.heic", mime: "image/heic" },
+      { name: "IMG_0002.jpg", path: saved },
+    ]);
   });
 
   test("keeps the id of the message being replied to", async () => {
@@ -97,22 +175,14 @@ describe("imessage messages", () => {
     expect(reply?.replyTo).toBe(first.guid);
   });
 
-  test("each call reads from the newest message, even after an earlier read stopped early", async () => {
-    const take = async (n: number) => {
-      const out: string[] = [];
-      for (const m of source.messages({}) as Iterable<Message>) {
-        out.push(m.text);
-        if (out.length === n) break;
-      }
-      return out;
-    };
-    expect(await take(2)).toEqual(["chapter 3 tonight", "nice"]);
-    expect(await take(3)).toEqual(["chapter 3 tonight", "nice", ""]);
+  test("each call reads from the newest message, even after an earlier read stopped early", () => {
+    expect(take(2)).toEqual(["chapter 3 tonight", "nice"]);
+    expect(take(3)).toEqual(["chapter 3 tonight", "nice", ""]);
   });
 
   test("explains how to fix a database it can't open", () => {
     const missing = imessage({ db: "/nonexistent/chat.db", contacts: false });
-    expect(() => missing.chats()).toThrow(/Full Disk Access/);
+    expect(() => missing.chats()).toThrow(/Full Disk Access/u);
   });
 });
 
@@ -121,14 +191,38 @@ describe("imessage watch", () => {
     const live = source.watch({})[Symbol.asyncIterator]();
     const next = live.next();
     await Bun.sleep(100);
-    const late = fake.message({ chat: named, from: SAM, text: "running late", date: day(7), unlinked: true });
+
+    const late = fake.message({
+      chat: named,
+      from: SAM,
+      text: "running late",
+      date: day(7),
+      unlinked: true,
+    });
+
     await Bun.sleep(100);
     fake.link(late.rowid, named);
-    fake.message({ chat: rileyIm, from: RILEY, text: "Liked “running late”", reactionTo: late.guid, date: day(7, 13) });
+    fake.message({
+      chat: rileyIm,
+      from: RILEY,
+      text: "Liked “running late”",
+      reactionTo: late.guid,
+      date: day(7, 13),
+    });
     fake.message({ chat: rileyIm, from: RILEY, text: "on my way", date: day(7, 14) });
 
-    expect((await next).value).toMatchObject({ text: "running late", chat: { id: "chat901", name: "Book club" } });
-    expect((await live.next()).value).toMatchObject({ text: "on my way", from: { name: "Riley Quinn" } });
+    const arrived = await next;
+
+    expect(arrived.value).toMatchObject({
+      text: "running late",
+      chat: { id: "chat901", name: "Book club" },
+    });
+    const following = await live.next();
+
+    expect(following.value).toMatchObject({
+      text: "on my way",
+      from: { name: "Riley Quinn" },
+    });
     await live.return?.();
   });
 });

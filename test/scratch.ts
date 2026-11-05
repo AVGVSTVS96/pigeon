@@ -1,8 +1,12 @@
 import { afterAll } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 
-const root = mkdtempSync(join(tmpdir(), "pigeon-test-"));
+const root = mkdtempSync(path.join(tmpdir(), "pigeon-test-"));
+
 process.env.TMPDIR = root;
-afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+afterAll(() => {
+  rmSync(root, { recursive: true, force: true });
+});

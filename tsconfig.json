@@ -1,16 +1,18 @@
 {
   "compilerOptions": {
-    "lib": ["ESNext"],
-    "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    "target": "es2024",
+    "lib": ["es2024", "esnext.disposable"],
     "types": ["bun"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
-    "skipLibCheck": true,
-    "noEmit": true,
+    "exactOptionalPropertyTypes": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "module": "preserve",
+    "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true
+    "noEmit": true,
+    "skipLibCheck": true
   },
-  "include": ["src", "test", "examples"]
+  "include": ["src", "test", "examples", "demo", "tools", "oxlint.config.ts"]
 }

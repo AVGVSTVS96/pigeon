@@ -1,5 +1,7 @@
 import { Database } from "bun:sqlite";
+
 import { Glob } from "bun";
+
 import { handleKey } from "../../handles.ts";
 
 const NAME = `
@@ -16,35 +18,51 @@ const HANDLES = `
   SELECT e.ZADDRESS AS handle, ${NAME} AS name
   FROM ZABCDEMAILADDRESS e JOIN ZABCDRECORD r ON r.Z_PK = e.ZOWNER`;
 
-function databases(root: string): string[] {
+const EVERY_ACCOUNTS_DATABASE = ["AddressBook-v22.abcddb", "Sources/*/AddressBook-v22.abcddb"];
+
+interface HandleRow {
+  handle: string | null;
+  name: string | null;
+}
+
+const databases = (root: string): string[] => {
   try {
-    return ["AddressBook-v22.abcddb", "Sources/*/AddressBook-v22.abcddb"].flatMap((pattern) => [
-      ...new Glob(pattern).scanSync({ cwd: root, absolute: true }),
+    return EVERY_ACCOUNTS_DATABASE.flatMap((pattern) => [
+      ...new Glob(pattern).scanSync({ absolute: true, cwd: root }),
     ]);
   } catch {
     return [];
   }
-}
+};
 
-/**
- * Names from the macOS Contacts database, keyed by `handleKey`. Read directly
- * so it works over ssh, where the Contacts framework isn't available. Every
- * account (iCloud, Google, local) keeps its own database under Sources/.
- */
-export function loadContacts(root: string): Map<string, string> {
+const readHandles = (file: string): HandleRow[] => {
+  let db: Database | undefined;
+
+  try {
+    db = new Database(file, { readonly: true });
+
+    return db.query<HandleRow, []>(HANDLES).all();
+  } catch {
+    return [];
+  } finally {
+    db?.close();
+  }
+};
+
+export const loadContacts = (root: string): Map<string, string> => {
   const names = new Map<string, string>();
-  for (const file of databases(root)) {
-    let db: Database | undefined;
-    try {
-      db = new Database(file, { readonly: true });
-      for (const { handle, name } of db.query<{ handle: string | null; name: string | null }, []>(HANDLES).all()) {
-        if (handle && name && !names.has(handleKey(handle))) names.set(handleKey(handle), name);
-      }
-    } catch {
-      continue;
-    } finally {
-      db?.close();
+
+  for (const { handle, name } of databases(root).flatMap(readHandles)) {
+    if (
+      handle !== null &&
+      name !== null &&
+      handle !== "" &&
+      name !== "" &&
+      !names.has(handleKey(handle))
+    ) {
+      names.set(handleKey(handle), name);
     }
   }
+
   return names;
-}
+};

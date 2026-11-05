@@ -1,6 +1,7 @@
 import { copyFile, mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import path from "node:path";
+
 import type { Outgoing } from "../../types.ts";
 
 const SCRIPT = `
@@ -20,35 +21,48 @@ on run argv
   end tell
 end run`;
 
-/** Messages reliably reads files only from inside its own folder, so copy them there first. */
-async function stage(file: string): Promise<string> {
-  const dir = join(homedir(), "Library/Messages/Attachments/pigeon", crypto.randomUUID());
+const copyIntoMessagesFolder = async (file: string): Promise<string> => {
+  const dir = path.join(homedir(), "Library/Messages/Attachments/pigeon", crypto.randomUUID());
+
   await mkdir(dir, { recursive: true });
-  const staged = join(dir, basename(file));
-  await copyFile(resolve(file), staged);
+  const staged = path.join(dir, path.basename(file));
+
+  await copyFile(path.resolve(file), staged);
+
   return staged;
-}
+};
 
 export type Recipient = { chat: string } | { handle: string };
 
 const TIMEOUT_MS = 30_000;
 
-export async function send(to: Recipient, { text = "", files = [] }: Outgoing): Promise<void> {
-  if (!text && files.length === 0) throw new Error("nothing to send");
-  const staged = await Promise.all(files.map(stage));
+export const send = async (to: Recipient, { text = "", files = [] }: Outgoing): Promise<void> => {
+  if (!text && files.length === 0) {
+    throw new Error("nothing to send");
+  }
+
+  const staged = await Promise.all(files.map(copyIntoMessagesFolder));
   const [kind, id] = "chat" in to ? ["chat", to.chat] : ["handle", to.handle];
+
   const proc = Bun.spawn(["osascript", "-", id, kind, text, ...staged], {
+    stderr: "pipe",
     stdin: new Blob([SCRIPT]),
     stdout: "ignore",
-    stderr: "pipe",
     timeout: TIMEOUT_MS,
   });
+
   const code = await proc.exited;
-  if (proc.signalCode) {
+
+  if (proc.signalCode !== null) {
     throw new Error(
       "Messages didn't answer. The first send from a new app or ssh needs a one-time OK: " +
         "check for a prompt on the Mac, or System Settings › Privacy & Security › Automation.",
     );
   }
-  if (code !== 0) throw new Error(`Messages couldn't send: ${(await new Response(proc.stderr).text()).trim()}`);
-}
+
+  if (code !== 0) {
+    const stderr = await new Response(proc.stderr).text();
+
+    throw new Error(`Messages couldn't send: ${stderr.trim()}`);
+  }
+};

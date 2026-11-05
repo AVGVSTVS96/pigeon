@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import { REDACTED, redact } from "../src/redact.ts";
 import type { Message } from "../src/types.ts";
 
@@ -16,7 +17,12 @@ const message = (over: Partial<Message> = {}): Message => ({
 describe("redact", () => {
   test("hides a whole chat for one local day, text and attachments", () => {
     const rule = redact({ chat: "+12125550100", on: "2026-10-06" });
-    expect(rule(message())).toEqual({ ...message(), text: REDACTED, attachments: [], redacted: true });
+    expect(rule(message())).toEqual({
+      ...message(),
+      text: REDACTED,
+      attachments: [],
+      redacted: true,
+    });
     expect(rule(message({ from: { id: "me", name: "me" } }))).toMatchObject({ text: REDACTED });
     expect(rule(message({ date: new Date(2026, 9, 6, 0, 0) }))).toMatchObject({ text: REDACTED });
     expect(rule(message({ date: new Date(2026, 9, 5, 23, 59) }))).toBe(true);
@@ -32,6 +38,7 @@ describe("redact", () => {
     for (const chat of ["+1 (212) 555-0100", "2125550100", "212.555.0100"]) {
       expect(redact({ chat })(message())).toMatchObject({ redacted: true });
     }
+
     expect(redact({ chat: "+12125550199" })(message())).toBe(true);
   });
 
@@ -41,12 +48,18 @@ describe("redact", () => {
 
   test("narrows by sender, including me", () => {
     expect(redact({ from: "me" })(message())).toBe(true);
-    expect(redact({ from: "me" })(message({ from: { id: "me", name: "me" } }))).toMatchObject({ redacted: true });
+    expect(redact({ from: "me" })(message({ from: { id: "me", name: "me" } }))).toMatchObject({
+      redacted: true,
+    });
   });
 
   test("hides only matching strings, case-insensitively for plain strings", () => {
-    const rule = redact({ match: ["GATE CODE", /\d{5}/] });
-    expect(rule(message())).toEqual({ ...message(), text: `the ${REDACTED} is 4321`, redacted: true });
+    const rule = redact({ match: ["GATE CODE", /\d{5}/u] });
+    expect(rule(message())).toEqual({
+      ...message(),
+      text: `the ${REDACTED} is 4321`,
+      redacted: true,
+    });
     expect(rule(message({ text: "nothing here" }))).toBe(true);
   });
 
@@ -59,11 +72,15 @@ describe("redact", () => {
   });
 
   test("ignores a regex's sticky flag and leftover lastIndex", () => {
-    const sticky = /\d{4}/y;
-    expect(redact({ match: sticky })(message())).toMatchObject({ text: `the gate code is ${REDACTED}` });
-    const reused = /\d{4}/g;
+    const sticky = /\d{4}/uy;
+    expect(redact({ match: sticky })(message())).toMatchObject({
+      text: `the gate code is ${REDACTED}`,
+    });
+    const reused = /\d{4}/gu;
     reused.test("9999 4321");
-    expect(redact({ match: reused })(message())).toMatchObject({ text: `the gate code is ${REDACTED}` });
+    expect(redact({ match: reused })(message())).toMatchObject({
+      text: `the gate code is ${REDACTED}`,
+    });
   });
 
   test("merges overlapping matches into one marker", () => {
