@@ -1,132 +1,56 @@
 # pigeon
 
-An iMessage CLI with pluggable sources and filters. Read, search, watch and
-send; filters (including `redact()`) decide what anything reading through
-pigeon gets to see. Bun + TypeScript, no runtime dependencies.
-
-**The shape of it**
-
-```
-sources ──messages() newest first──┐
- imessage (built in)               │
- yours (config.ts)                 ▼
-                         merge by date, re-check chat/since/until
-                                   │
-config.ts filters ─────────────────┤  keep · drop · replace, fail closed
-                                   ▼
-                         search (after filters) · limit
-                                   │
-                    CLI (src/cli)  or  library (open / pigeon)
-```
-
-iMessage is **not privileged**: it's declared with the same `defineSource`
-and `Source` interface a user's config gets. Anything it can do, a config
-source can do. Keep it that way; when a feature could be a source option or a
-filter instead of a flag, make it that.
-
----
+An iMessage CLI and library with pluggable sources and filters. Filters (including `redact()`) decide what anything reading through pigeon gets to see. Bun + TypeScript, no runtime dependencies. Public, MIT, published as `@avgvstvs96/pigeon`.
 
 ## Commands
 
-```bash
-bun test              # all tests (bun:test), against fake databases only
-bun run typecheck     # tsc --noEmit
-bun demo/seed.ts      # build demo/data (fake chat.db + config), prints PIGEON_CONFIG=...
-bun src/cli/main.ts   # run the CLI from source
-```
+- `bun run check`: oxlint, oxfmt, `tsc`, `bun test` (fake databases only). Lefthook runs it before each commit, CI on each push.
+- `bun run fix`: oxlint's fixes, then oxfmt.
+- `bun demo/seed.ts`: builds `demo/data` (a fake chat.db and config) and prints its `PIGEON_CONFIG=…`.
+- `bun src/cli/main.ts`: the CLI from source.
 
-## Layout
+## Map
 
 ```
-src/
-  index.ts             PUBLIC API (package exports): types, pigeon, open, redact, imessage, defineSource
-  types.ts             Message, Chat, Person, Attachment, Source, Filter, Config
-  pigeon.ts            the core: merge sources, apply filters, resolve chats, search, watch, send
-  config.ts            find + load ~/.config/pigeon/config.ts (fails closed), open()
-  redact.ts            the redact() filter
-  handles.ts           phone/email normalization (handleKey, sameHandle)
-  time.ts              local-day parsing, "3d"-style durations
-  define.ts            defineSource
-  cli/main.ts          bin: arg parsing and commands
-  cli/format.ts        transcript lines, chat lines, JSON with local dates
-  sources/imessage/
-    index.ts           the iMessage source: SQL over chat.db, watch, send
-    typedstream.ts     message text from attributedBody
-    contacts.ts        names from the macOS Contacts databases
-    send.ts            AppleScript send
-examples/telegram.ts   a complete user source (Telegram Desktop JSON export)
-demo/seed.ts           fake data for the README and recordings
-test/                  fixture.ts builds fake chat.db / Contacts databases
+sources ──messages() newest first──┐
+ imessage (built in), yours        ▼
+                         merge by date, re-check chat/since/until
+config.ts filters ───────► screen(): keep · drop · replace, fail closed → Screened
+                         search (after filters) · limit
+                    CLI (src/cli)  or  library (src/index.ts)
 ```
 
-## Invariants
+| Folder                  | Job                                                             |
+| ----------------------- | --------------------------------------------------------------- |
+| `src/index.ts`          | the public API: anything exported there is a breaking change    |
+| `src/pigeon.ts`         | the core: merge sources, resolve chats, search, watch, send     |
+| `src/screen.ts`         | runs the filters and is the only maker of a `Screened` message  |
+| `src/config.ts`         | finds and loads `~/.config/pigeon/config.ts`, parsed and strict |
+| `src/sources/imessage/` | chat.db, Contacts, typedstream text, AppleScript send           |
+| `src/cli/`              | argument parsing, transcript and JSON output                    |
+| `examples/`, `skills/`  | a complete Telegram source; the skill agents install            |
 
-**Filters can't be skipped.** No flag or option bypasses them. Every path
-that hands out messages (`messages`, `watch`, the CLI, the library) goes
-through `screen()` in `pigeon.ts`. Choosing a different config file
-(`PIGEON_CONFIG`, `XDG_CONFIG_HOME`) is deliberate, not careless, and stays
-allowed: pigeon guards against careless reads, not determined ones.
+iMessage is not privileged: it's declared with the same `defineSource` a user's config gets. When a feature could be a source option or a filter instead of a flag, make it that.
 
-**Fail closed.** A filter that throws, or returns anything but `true` or a
-message, drops that message. A config that fails to import or has the wrong
-shape is fatal: `loadConfig` throws and the CLI exits 1 with nothing on
-stdout. Never "log and continue without the config" like most tools do.
+## Rules and what enforces them
 
-**Rules target ids, never names.** `redact({ chat })` matches chat ids only.
-Names come from Contacts, which can be unreadable or renamed, and a rule that
-silently stops matching shows what it hid. Configs are strict for the same
-reason: no default export or an unknown key is a load error.
+| Rule                                                                                          | Enforced by                                                           |
+| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Filters can't be skipped: every message the library and CLI hand out went through them        | `Screened` type on `Pigeon` and the CLI printers; `as` is lint-banned |
+| Fail closed: a filter that throws or returns junk drops the message; a bad config is fatal    | `test/pigeon.test.ts`, `test/cli.test.ts`                             |
+| Search runs after filters, so it can't reveal hidden text                                     | `test/pigeon.test.ts`, `test/cli.test.ts`                             |
+| Sources yield newest first and the core trusts nothing else in a `Query`                      | `test/pigeon.test.ts` (a source that ignores its query)               |
+| Tapbacks never become messages, so hidden text can't leak through a reaction                  | `test/imessage.test.ts`                                               |
+| chat.db is read-only                                                                          | `readonly: true`, `test/imessage.test.ts`                             |
+| No comments, `as`, `any` or non-null `!`                                                      | `oxlint.config.ts`                                                    |
+| Rules target ids, never names: names come from Contacts and change under a rule               | `test/redact.test.ts`; judgment for new filters                       |
+| `send` never guesses: only an id or an exact name, since a wrong guess texts the wrong people | judgment                                                              |
+| `chats()` is metadata and documented as unfiltered                                            | judgment                                                              |
 
-**Filters apply to messages, not the chat list.** `chats()` is metadata
-(names, people, last activity) and is documented as unfiltered.
-
-**`send` never guesses.** It takes an id or an exact name; partial name
-matches are for reading only, since a wrong guess texts the wrong people.
-
-**Search runs after filters.** Matching raw text first would let a search
-reveal what a redaction hides. A source may pre-filter for speed, but the core
-always re-matches the filtered text.
-
-**Sources yield newest first; the core trusts nothing else.** `Query` is a
-hint. `pigeon.ts` re-checks chat, since and until, and stops at the first
-message older than `since`, so a source that ignores the query is still
-correct.
-
-**Tapbacks never become messages.** In chat.db a tapback is a message row
-whose text quotes the message it reacts to. The iMessage source excludes
-`associated_message_type` 2000–3999 so a hidden message can't leak through a
-reaction to it.
-
-**One chat per identifier.** Messages keeps separate chat rows for iMessage and
-SMS with the same person; the iMessage source merges them by
-`chat_identifier`, which is also the chat's public id. For 1:1 chats that id is
-the person's handle, so `redact({ chat: "+1…" })` targets exactly that
-conversation and not group chats they're in.
-
-**chat.db is read-only.** Open it with `{ readonly: true }`, never write.
-Dates are nanoseconds since 2001-01-01 (`fromAppleTime` handles old
-second-based rows too).
-
-**`src/index.ts` is public API.** Treat changes to anything exported there,
-and to the `Source` / `Message` shapes, as breaking.
+Choosing a different config file (`PIGEON_CONFIG`, `XDG_CONFIG_HOME`) stays allowed: pigeon guards against careless reads, not determined ones.
 
 ## Privacy
 
-This repo is public. Tests, fixtures, the demo and docs use made-up people
-only (555-01xx numbers, example.com emails). Never commit anything read from a
-real chat.db or Contacts database. When checking behavior against a real
-database, print counts, never message text.
+This repo is public. Tests, fixtures, the demo and docs use made-up people only (555-01xx numbers, example.com emails). Never commit anything read from a real chat.db or Contacts database; when checking against a real one, print counts, never message text.
 
-## Conventions
-
-- Bun-first: `bun:sqlite`, `Bun.file`, `Bun.spawn`, `bun:test`.
-- `.ts` extensions on relative imports; named exports only.
-- Plain TypeScript in the public API so anyone can write a source.
-- Comments only for the non-obvious (chat.db quirks, ordering rules).
-- Errors for people: say what failed and how to fix it, one line on stderr.
-
-## Docs to keep in sync
-
-`README.md` is the user-facing contract: commands, flags, the config API,
-`redact()` fields and the JSON shape. Change it in the same commit as any of
-those.
+`README.md` is the user-facing contract (commands, flags, the config API, `redact()` fields, the JSON shape): change it in the same commit as any of those. TypeScript is 7, newer than most model memory.

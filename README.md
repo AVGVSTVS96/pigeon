@@ -62,14 +62,14 @@ A chat is its id or its name. For a 1:1 iMessage chat the id is the other
 person's phone number or email, written any way you like (`+1 212 555 0101`,
 `2125550101`). Group chats have ids like `chat204`, shown by `pigeon chats`.
 
-| Flag | Meaning |
-| ---- | ------- |
-| `-n`, `--limit <n>` | how many to show (default 30) |
+| Flag                   | Meaning                                                                     |
+| ---------------------- | --------------------------------------------------------------------------- |
+| `-n`, `--limit <n>`    | how many to show (default 30)                                               |
 | `-s`, `--since <when>` | `30m`, `12h`, `3d`, `2w`, `today`, `yesterday`, or a date like `2026-10-01` |
-| `-u`, `--until <when>` | same forms as `--since` |
-| `-c`, `--chat <chat>` | limit `search` or `watch` to one chat |
-| `-f`, `--file <path>` | attach a file to `send` (repeatable) |
-| `--json` | one JSON object per line |
+| `-u`, `--until <when>` | same forms as `--since`                                                     |
+| `-c`, `--chat <chat>`  | limit `search` or `watch` to one chat                                       |
+| `-f`, `--file <path>`  | attach a file to `send` (repeatable)                                        |
+| `--json`               | one JSON object per line                                                    |
 
 `read` and `search` show the newest matches, printed oldest first like a
 conversation. Dates are local time, in text and in JSON.
@@ -111,9 +111,9 @@ import type { ConfigFactory } from "@avgvstvs96/pigeon";
 export default (({ imessage, redact }) => ({
   sources: [imessage()],
   filters: [
-    redact({ chat: "+12125550102", on: "2026-10-06" }),   // one chat, one day
-    redact({ match: /\b\d{3}-\d{2}-\d{4}\b/ }),             // anything shaped like an SSN
-    (m) => !/verification code/i.test(m.text),             // drop 2FA texts entirely
+    redact({ chat: "+12125550102", on: "2026-10-06" }), // one chat, one day
+    redact({ match: /\b\d{3}-\d{2}-\d{4}\b/ }), // anything shaped like an SSN
+    (m) => !/verification code/i.test(m.text), // drop 2FA texts entirely
   ],
 })) satisfies ConfigFactory;
 ```
@@ -124,10 +124,10 @@ Without a config, pigeon reads iMessage with no filters.
 
 A filter is a function that gets each message and returns:
 
-| Return | Effect |
-| ------ | ------ |
-| `true` | keep it |
-| `false` | drop it |
+| Return    | Effect                |
+| --------- | --------------------- |
+| `true`    | keep it               |
+| `false`   | drop it               |
 | a message | show this one instead |
 
 Filters run in order, on every command: `read`, `search`, `watch`, and the
@@ -138,7 +138,7 @@ filters allow.
 pigeon fails closed. A filter that throws drops the message it threw on. A
 config that fails to load stops pigeon with an error instead of running
 without its filters, and so does one with a typo in it (`filter:` instead of
-`filters:`). Search runs *after* filters, so hidden text can't be found by
+`filters:`). Search runs _after_ filters, so hidden text can't be found by
 searching for it.
 
 Filters apply to messages. `pigeon chats` still lists every chat, with its
@@ -151,20 +151,20 @@ but replaces its text with `[redacted]`, so a reader still sees that
 something was said, and when, but not what. Every field narrows the rule:
 
 ```ts
-redact({ chat: "+12125550102" })                     // a whole chat
-redact({ chat: "chat204", on: "2026-10-06" })        // one day of a group chat
-redact({ from: "+12125550102", since: "2026-09-01" }) // one person, from a date on
-redact({ from: "me", until: "2020-01-01" })          // everything you sent before 2020
-redact({ match: ["gate code", /\d{4}/] })            // just these strings, everywhere
+redact({ chat: "+12125550102" }); // a whole chat
+redact({ chat: "chat204", on: "2026-10-06" }); // one day of a group chat
+redact({ from: "+12125550102", since: "2026-09-01" }); // one person, from a date on
+redact({ from: "me", until: "2020-01-01" }); // everything you sent before 2020
+redact({ match: ["gate code", /\d{4}/] }); // just these strings, everywhere
 ```
 
-| Field | Matches |
-| ----- | ------- |
-| `chat` | a chat id (one or a list): a phone number or email for 1:1 chats, the id from `pigeon chats` for groups |
-| `from` | a sender's handle, or `"me"` (one or a list) |
-| `on` | a whole day, local time: `"2026-10-06"` |
-| `since` / `until` | a time range: a `Date`, a timestamp, or a date string |
-| `match` | strings (case-insensitive) or regexes to hide in the text and attachment names; without it, the whole message is hidden along with its attachments |
+| Field             | Matches                                                                                                                                            |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chat`            | a chat id (one or a list): a phone number or email for 1:1 chats, the id from `pigeon chats` for groups                                            |
+| `from`            | a sender's handle, or `"me"` (one or a list)                                                                                                       |
+| `on`              | a whole day, local time: `"2026-10-06"`                                                                                                            |
+| `since` / `until` | a time range: a `Date`, a timestamp, or a date string                                                                                              |
+| `match`           | strings (case-insensitive) or regexes to hide in the text and attachment names; without it, the whole message is hidden along with its attachments |
 
 Phone numbers match however they're written, so `"212-555-0102"` and
 `"+12125550102"` are the same person. Rules take ids, not names: a contact
@@ -235,7 +235,10 @@ for await (const m of pigeon.watch()) {
 }
 ```
 
-`pigeon({ sources, filters })` builds one without reading a config file.
+`pigeon({ sources, filters })` builds one without reading a config file. Every
+message it hands out is a `Screened` message, a type only pigeon's filter step
+can make, so code built on it can't print or pass on a message that skipped
+your filters.
 
 ## For agents
 
