@@ -34,18 +34,18 @@ iMessage is not privileged: it's declared with the same `defineSource` a user's 
 
 ## Rules and what enforces them
 
-| Rule                                                                                          | Enforced by                                                           |
-| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Filters can't be skipped: every message the library and CLI hand out went through them        | `Screened` type on `Pigeon` and the CLI printers; `as` is lint-banned |
-| Fail closed: a filter that throws or returns junk drops the message; a bad config is fatal    | `test/pigeon.test.ts`, `test/cli.test.ts`                             |
-| Search runs after filters, so it can't reveal hidden text                                     | `test/pigeon.test.ts`, `test/cli.test.ts`                             |
-| Sources yield newest first and the core trusts nothing else in a `Query`                      | `test/pigeon.test.ts` (a source that ignores its query)               |
-| Tapbacks never become messages, so hidden text can't leak through a reaction                  | `test/imessage.test.ts`                                               |
-| chat.db is read-only                                                                          | `readonly: true`, `test/imessage.test.ts`                             |
-| No comments, `as`, `any` or non-null `!`                                                      | `oxlint.config.ts`                                                    |
-| Rules target ids, never names: names come from Contacts and change under a rule               | `test/redact.test.ts`; judgment for new filters                       |
-| `send` never guesses: only an id or an exact name, since a wrong guess texts the wrong people | judgment                                                              |
-| `chats()` is metadata and documented as unfiltered                                            | judgment                                                              |
+| Rule                                                                                                                 | Enforced by                                                           |
+| -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Filters can't be skipped: every message the library and CLI hand out went through them                               | `Screened` type on `Pigeon` and the CLI printers; `as` is lint-banned |
+| Fail closed: a filter that throws or returns junk drops the message; a bad config is fatal                           | `test/pigeon.test.ts`, `test/cli.test.ts`                             |
+| Search runs after filters, so it can't reveal hidden text                                                            | `test/pigeon.test.ts`, `test/cli.test.ts`                             |
+| Sources yield newest first and the core trusts nothing else in a `Query`                                             | `test/pigeon.test.ts` (a source that ignores its query)               |
+| Tapbacks never become messages, so hidden text can't leak through a reaction                                         | `test/imessage.test.ts`                                               |
+| chat.db is read-only                                                                                                 | `readonly: true`, `test/imessage.test.ts`                             |
+| No `as`, `any` or non-null `!`; comments only for a decision or fact the code can't show (one `WHY:` line or a link) | `oxlint.config.ts`                                                    |
+| Rules target ids, never names: names come from Contacts and change under a rule                                      | `test/redact.test.ts`; judgment for new filters                       |
+| `send` never guesses: only an id or an exact name, since a wrong guess texts the wrong people                        | judgment                                                              |
+| `chats()` is metadata and documented as unfiltered                                                                   | judgment                                                              |
 
 Choosing a different config file (`PIGEON_CONFIG`, `XDG_CONFIG_HOME`) stays allowed: pigeon guards against careless reads, not determined ones.
 
